@@ -1,10 +1,10 @@
 # -*- mode:org; -*-
 
 #+title:A Guide to Securing Node.js Applications
-#+subtitle:{{{version}}} {{{date}}}
+#+subtitle:Educative {{{version}}} {{{date}}}
 #+author:WLH4
-#+date:2020-12-10 20:16
-#+macro:version Version 0.0.0
+#+date:2020-12-10 21:49
+#+macro:version Version 0.0.1
 #+macro:upload-date (eval (current-time-string))
 #+bucket:pinecone-forest.com
 
@@ -16,9 +16,848 @@
 * Introduction
 :PROPERTIES:
 :unnumbered: t
+:created_by: Ben Edmunds
+:level:    intermediate
+:lessons:  36
+:quizzes:  7
+:playgrounds: 20
+:code_snippets: 53
+:illustrations: 39
 :END:
-* Chapter
-
+- [[https://github.com/benedmunds/Building-Secure-Node-Apps-Examples][GitHub]]
+
+** Course Overview
+This course  is your guide for  securing Node.js applications. You'll  start by
+- properly *sanitizing user input and output*, and then
+- move on to some *fundamental protocols*, such  as
+  - HTTPS and
+  - SHA.
+- *Passwords* and *encryption* will  be discussed next.
+- More specifically, you will learn about different *hashing algorithms* and
+- protecting your application from *brute force* attacks.
+- Following that,  you'll explore  concepts like
+  - authentication,
+  - access control, and
+  - obfuscation.
+- You  will also learn about
+  - XSS,
+  - CSRF,  and
+  - other popular hacks near the end of the course.
+- By the end of  this course, you will know how to
+  - secure a Node.js application, an in-demand skill to put on your resume!
+
+** Learning Objectives
+- Sanitize user input and output.
+- Understand and implement HTTPS.
+- Create secure hashes using random salts.
+- Implement access control with authentication.
+- protect yourself against XSS and CSRF.
+
+** Who is this course for
+The intended audience and prerequisites for this course.
+
+*** Prerequisites
+You  should be  well-versed  in  the fundamentals  of  Node.js before  securing
+Node.js applications.
+
+If  you want  a refresher  on  Node.js, check  out our  other Node.js  courses.
+
+Familiarity with Express  is also recommended as the code  snippets assume that
+we are working on an [[https://expressjs.com][Express]] application.
+
+*** What this Course Offers
+This course serves as  a survival guide for a world full  of security flaws and
+hackers
+
+The  course is  for  Node,js developers  looking to  improve  and secure  their
+applications. The  course is  full of handy  code snippets,  illustrations, and
+real-life stories.
+
+You will begin by
+- securing  user input  and learning  how that  input can  open you  up to  SQL
+  injection attacks.
+- Most importantly, you  will learn to protect yourself and  your users against
+  such attacks.
+- Then, you will learn about some fundamental protocols and algorithms, such as
+  HTTPS,  SSL, and  SHA. Implementing  HTTPS  is a  stepping-stone to  creating
+  secure web applications.
+
+- Then,  the course  discusses passwords  and  hashes.
+
+- You  will explore
+  - hashing algorithms,
+  - password attacks,  and
+  - protecting your  application against  such attacks.
+- You will then move to authentication  and access control. This will allow you
+  to implement user roles and prevent unauthorized access to secure web pages.
+- Finally, you will explore XSS and CSRF and how they can be mitigated.
+
+** About the Course
+*** Introduction
+Several years ago,  I wrote a web  application for a client  in the CodeIgniter
+PHP   framework.  At   the  time,   CodeIgniter  didn’t   include  a   built-in
+authentication system. I did what any good  developer does and went on the hunt
+for a well-made library to supply authentication capabilities. To my chagrin, I
+fail to find any concise libraries that  fit my needs. Thus began my journey of
+creating  Ion Auth,  a simple  authentication  library for  CodeIgniter, and  a
+career-long crusade to secure web applications for myself and other developers.
+
+Now, many  have moved to other  frameworks or languages, but  basic security is
+often  overlooked. Let’s  fix  that.  Let’s avoid  the  horror  of leaked  user
+passwords, malicious SQL into your database or any other avoidable hacks.
+
+This course is short with handbook-style  references to specific items that can
+better secure your  application. You can complete  it in a couple  of hours and
+then reference later as needed. And let’s have some fun in the process.
+
+* Sanitize ALL Input
+
+** SQL Injection
+Learn about how SQL injection works and its impact.
+
+*** Storytime
+Let’s start with a story. Mike is  the system admin for a small private school.
+His main responsibility is maintaining  the network and computers. Recently, he
+started  automating  various  tasks  around   the  school  by  building  a  web
+application for internal use. He has no formal training and minimal programming
+experience.  Knowing the  basics  of PHP,  he built  a  pretty stable  customer
+relationship  manager  for  the  school   and  even  received  kudos  from  the
+superintendent for streamlining operations and saving the school money.
+
+Everything was going well for Mike  until a particular new student started. The
+student’s  name is  Little Bobby  Tables. One  day, Jon  from the  admin office
+called Mike to ask  why the system was down. After  inspection, Mike found that
+the table  containing all the  students’ information was missing  entirely. You
+see, Little  Bobby’s full name  is actually “Robert’); DROP  TABLE students;–”.
+There aren’t any  backups of the database;  it has been on Mike’s  “to do” list
+for a while, but he hadn’t gotten around to it yet. Mike is in big trouble.
+
+*** Real World
+
+#+cindex:SQL injection vulnerability
+While it’s unlikely a child’s name will  contain harmful SQL code, this kind of
+*SQL injection vulnerability* happens in the real world all the time:
+
+- In 2012, LinkedIn leaked over 6 million users’ data due to an undisclosed SQL
+  injection vulnerability.
+- In 2012, Yahoo! exposed 450,000 user passwords.
+- In 2012, 400,000 passwords were compromised from Nvidia.
+- In 2012, 150,000 passwords were compromised from Adobe.
+- In 2013, Harmony had roughly 1.5 million user passwords exposed.
+
+For most of these, precise details are undisclosed. We can’t be sure these were
+due to SQL injection attacks, but it is likely.
+
+*** How SQL Injection Works
+If  you  use  user  input  without modification,  a  malicious  user  can  pass
+unexpected data and fundamentally change your SQL queries.
+
+If your code looks something like this:
+
+#+begin_src sql
+  UPDATE users
+      SET first_name="' + req.body.first_name +  '" WHERE id=1001;
+#+end_src
+
+You would expect the generated SQL to be:
+
+#+begin_src sql
+  UPDATE users 
+      SET first_name="Liz" WHERE id=1001;
+#+end_src
+
+But if your malicious user types their first name as:
+
+: Liz", last_name="Lemon"; --
+
+The generated SQL then becomes:
+
+#+begin_src sql
+  UPDATE users
+      SET first_name="Liz", last_name="Lemon"; --" WHERE id=1001;
+#+end_src
+
+Now all of your users are named Liz Lemon, and that’s just not cool.
+
+*** SQL Injection in Action
+If preventive  measures are  not taken,  SQL injection  attacks can  cause many
+problems. Let’s inject  some SQL code. Hitting  the RUN button will  open a web
+application. The edit function is vulnerable. Try to exploit it!
+
+Your app can be found at:
+- https://6e5movo1xd239.educative.run/
+
+#+name:sql-injection-package.json
+#+begin_src js
+  {
+    "name": "psql-demo",
+    "version": "0.1.0",
+    "description": "PSQL demo for Securing Node JS Apps",
+    "main": "index.js",
+    "scripts": {
+      "test": "echo \"Error: no test specified\" && exit 1",
+      "start": "nodemon index.js",
+      "start:prod": "node index.js",
+      "build": "cd client && npm install && npm run build",
+      "client": "npm start --prefix client",
+      "dev": "concurrently \"npm run start\" \"npm run client\""
+    },
+    "author": "Educative",
+    "license": "MIT",
+    "dependencies": {
+      "body-parser": "^1.18.3",
+      "cors": "^2.8.5",
+      "express": "^4.16.4",
+      "concurrently": "^5.3.0",
+      "nodemon": "^2.0.4",
+      "password-generator": "^2.2.0",
+      "pg": "^8.3.3",
+      "pg-hstore": "^2.3.3",
+      "sequelize": "^6.3.5",
+      "http-proxy-middleware": "^1.0.5"
+    },
+    "devDependencies": {
+      "prettier": "^1.18.2"
+    }
+  }
+#+end_src
+
+#+name:sql-injection-index.js
+#+begin_src js
+  const express = require("express");
+  const bodyParser = require("body-parser");
+  const cors = require("cors");
+
+  const app = express();
+
+  const routeStudents = require("./src/routes/students");
+
+  app.use(bodyParser.urlencoded({ extended: false }));
+  app.use(bodyParser.json());
+  app.use(cors());
+
+  app.get("/", (req, res) => {
+    res.send("Backend for queries app is working!");
+  });
+
+  app.use("/api/students", routeStudents, (req, res) => res.sendStatus(401));
+
+  const port = 3000;
+  app.listen(port);
+
+  console.log(`listening on ${port}`);
+
+#+end_src
+
+**** client
+
+#+name:sql-injection-client-package.json
+#+begin_src js
+  {
+    "name": "psql-demo",
+    "version": "0.1.0",
+    "private": true,
+    "dependencies": {
+      "@material-ui/core": "^4.11.0",
+      "@material-ui/icons": "^4.9.1",
+      "material-table": "^1.69.1",
+      "react": "^16.7.0",
+      "react-dom": "^16.7.0",
+      "react-scripts": "2.1.2"
+    },
+    "scripts": {
+      "start": "PORT=15000 react-scripts start",
+      "build": "react-scripts build",
+      "test": "react-scripts test",
+      "eject": "react-scripts eject"
+    },
+    "eslintConfig": {
+      "extends": "react-app"
+    },
+    "browserslist": [
+      ">0.2%",
+      "not dead",
+      "not ie <= 11",
+      "not op_mini all"
+    ]
+  }
+#+end_src
+
+***** public
+- favicon,ico
+
+#+name:sql-injection-client-public-index.html
+#+begin_src html
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.ico" />
+      <meta
+	name="viewport"
+	content="width=device-width, initial-scale=1, shrink-to-fit=no"
+      />
+      <meta name="theme-color" content="#000000" />
+      <!--
+	manifest.json provides metadata used when your web app is added to the
+	homescreen on Android. See https://developers.google.com/web/fundamentals/web-app-manifest/
+      -->
+      <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+      <!--
+	Notice the use of %PUBLIC_URL% in the tags above.
+	It will be replaced with the URL of the `public` folder during the build.
+	Only files inside the `public` folder can be referenced from the HTML.
+
+	Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
+	work correctly both with client-side routing and a non-root public URL.
+	Learn how to configure a non-root public URL by running `npm run build`.
+      -->
+      <title>simple-mern</title>
+    </head>
+    <body>
+      <noscript>You need to enable JavaScript to run this app.</noscript>
+      <div id="root"></div>
+      <!--
+	This HTML file is a template.
+	If you open it directly in the browser, you will see an empty page.
+
+	You can add webfonts, meta tags, or analytics to this file.
+	The build step will place the bundled scripts into the <body> tag.
+
+	To begin the development, run `npm start` or `yarn start`.
+	To create a production bundle, use `npm run build` or `yarn build`.
+      -->
+    </body>
+  </html>
+#+end_src
+
+#+name:sql-injection-client-public-manifest.json
+#+begin_src js
+  {
+    "short_name": "simple-mern",
+    "name": "simple-mern",
+    "icons": [
+      {
+	"src": "favicon.ico",
+	"sizes": "64x64 32x32 24x24 16x16",
+	"type": "image/x-icon"
+      }
+    ],
+    "start_url": ".",
+    "display": "standalone",
+    "theme_color": "#000000",
+    "background_color": "#ffffff"
+  }
+#+end_src
+
+***** src
+
+#+name:sql-injection-client-App.css
+#+begin_src css
+  .App {
+    max-width: 600px;
+    margin: auto;
+    margin-top: 2em;
+    padding: 1em;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px 0px rgba(0, 0, 0, 0.1);
+  }
+
+  h1 {
+    font-weight: normal;
+    margin: 0;
+    padding-bottom: 8px;
+  }
+
+  .tasks {
+    list-style: none;
+    padding: 0;
+  }
+
+  .done {
+    text-decoration: line-through;
+    opacity: 0.5;
+  }
+
+  label {
+    vertical-align: top;
+  }
+
+  .delete-button {
+    padding-top: 4px;
+    margin-left: 8px;
+    cursor: pointer;
+    opacity: 0.3;
+    visibility: hidden;
+  }
+
+  li:hover .delete-button {
+    visibility: visible;
+  }
+
+  .delete-button:hover {
+    opacity: 0.6;
+  }
+
+  table {
+    font-family: arial, sans-serif;
+    border-collapse: collapse;
+    width: 100%;
+    padding: 8px;
+  }
+
+  td,
+  th {
+    border: 1px solid #dddddd;
+    text-align: center;
+    padding: 8px;
+  }
+
+  tr:nth-child(even) {
+    background-color: #dddddd;
+  }
+#+end_src
+
+#+name:sql-injectin-client-App.js
+#+begin_src js
+  import React, { Component } from "react";
+  import { TextField } from "@material-ui/core";
+  import Button from "@material-ui/core/Button";
+  import "./App.css";
+
+  import StudentList from "./components/StudentList";
+
+  class App extends Component {
+    state = {
+      new_first_name: "",
+      new_last_name: "",
+      new_id: "",
+    };
+
+    handleChange = (event) => {
+      this.setState({ [event.target.name]: event.target.value });
+    };
+
+    clickAddStudent = (event) => {
+      event.preventDefault();
+
+      const first_name = this.state.new_first_name;
+      const last_name = this.state.new_last_name;
+      const id = this.state.new_id;
+      const url = window.location.href.slice(0, -1);
+
+      fetch(url + ":3000/api/students/add", {
+	method: "post",
+	headers: { "Content-Type": "application/json" },
+	body: JSON.stringify({ first_name, last_name, id }),
+      }).then(() => {
+	this.setState({ newStudentTitle: "" });
+	this.refs.studentList.getStudents();
+      });
+    };
+
+    render() {
+      return (
+	<React.Fragment>
+	  <div className="App">
+	    <StudentList ref="studentList" />
+	    <form onSubmit={this.clickAddStudent}>
+	      <TextField
+		variant="outlined"
+		margin="normal"
+		required
+		fullWidth
+		id="new_first_name"
+		label="First Name"
+		name="new_first_name"
+		autoComplete="first_name"
+		autoFocus
+		onChange={this.handleChange}
+	      />
+	      <TextField
+		variant="outlined"
+		margin="normal"
+		required
+		fullWidth
+		id="new_last_name"
+		label="Last Name"
+		name="new_last_name"
+		autoComplete="last_name"
+		onChange={this.handleChange}
+	      />
+	      <TextField
+		variant="outlined"
+		margin="normal"
+		required
+		fullWidth
+		id="new_id"
+		label="ID"
+		name="new_id"
+		autoComplete="id"
+		onChange={this.handleChange}
+	      />
+	      <Button type="submit" fullWidth variant="contained" color="primary">
+		Add
+	      </Button>
+	    </form>
+	  </div>
+	</React.Fragment>
+      );
+    }
+  }
+
+  export default App;
+#+end_src
+
+#+name:sql-injection-client-index.css
+#+begin_src css
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+      "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 16px;
+  }
+
+  code {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
+      monospace;
+  }
+#+end_src
+
+#+name:sql-injection-client-index.js
+#+begin_src js
+  import React from 'react';
+  import ReactDOM from 'react-dom';
+  import './index.css';
+  import App from './App';
+
+  ReactDOM.render(<App />, document.getElementById('root'));
+#+end_src
+
+****** components
+
+#+name:sql-injection-client-components-StudentList.js
+#+begin_src js
+  import React, { Component, forwardRef } from "react";
+  import { Container } from "@material-ui/core/";
+  import MaterialTable from "material-table";
+  import {
+    AddBox,
+    ArrowUpward,
+    Check,
+    ChevronLeft,
+    ChevronRight,
+    Clear,
+    DeleteOutline,
+    Edit,
+    FilterList,
+    FirstPage,
+    LastPage,
+    Print,
+    Remove,
+    SaveAlt,
+    Search,
+    ViewColumn,
+  } from "@material-ui/icons/";
+
+  export default class StudentList extends Component {
+    state = {
+      columns: [
+	{ title: "First Name", field: "first_name" },
+	{ title: "Last Name", field: "last_name" },
+	{ title: "ID", field: "id", type: "numeric" },
+      ],
+      data: [],
+      loaded: false,
+    };
+
+    componentDidMount() {
+      this.getStudents();
+    }
+
+    getStudents = () => {
+      const url = window.location.href.slice(0, -1);
+      fetch(url + ":3000/api/students")
+	.then((res) => res.json())
+	.then((students) => {
+	  if (students.name === "SequelizeDatabaseError") {
+	    console.log("Empty!");
+	  } else {
+	    this.setState({
+	      data: [...students],
+	    });
+	  }
+	});
+    };
+
+    clickUpdateStudent = (old, student) => {
+      const url = window.location.href.slice(0, -1);
+      var { first_name, last_name, id } = student;
+      fetch(url + `:3000/api/students/update/${old.id}`, {
+	method: "post",
+	headers: { "Content-Type": "application/json" },
+	body: JSON.stringify({ first_name, last_name, id }),
+      }).then((res) => res.json());
+    };
+
+    clickDeleteStudent = (studentId) => {
+      const url = window.location.href.slice(0, -1);
+      fetch(url + `:3000/api/students/delete/${studentId}`, {
+	method: "delete",
+      })
+	.then((res) => res.json())
+	.catch((err) => console.log(err));
+    };
+
+    render() {
+      const tableIcons = {
+	Add: forwardRef((props, ref) => <AddBox {...props} ref={ref} />),
+	Check: forwardRef((props, ref) => <Check {...props} ref={ref} />),
+	Clear: forwardRef((props, ref) => <Clear {...props} ref={ref} />),
+	Delete: forwardRef((props, ref) => (
+	  <DeleteOutline {...props} ref={ref} />
+	)),
+	Edit: forwardRef((props, ref) => <Edit {...props} ref={ref} />),
+	Export: forwardRef((props, ref) => <SaveAlt {...props} ref={ref} />),
+	Filter: forwardRef((props, ref) => <FilterList {...props} ref={ref} />),
+	FirstPage: forwardRef((props, ref) => <FirstPage {...props} ref={ref} />),
+	LastPage: forwardRef((props, ref) => <LastPage {...props} ref={ref} />),
+	NextPage: forwardRef((props, ref) => (
+	  <ChevronRight {...props} ref={ref} />
+	)),
+	PreviousPage: forwardRef((props, ref) => (
+	  <ChevronLeft {...props} ref={ref} />
+	)),
+	Print: forwardRef((props, ref) => <Print {...props} ref={ref} />),
+	ResetSearch: forwardRef((props, ref) => <Clear {...props} ref={ref} />),
+	Search: forwardRef((props, ref) => <Search {...props} ref={ref} />),
+	SortArrow: forwardRef((props, ref) => (
+	  <ArrowUpward {...props} ref={ref} />
+	)),
+	ThirdStateCheck: forwardRef((props, ref) => (
+	  <Remove {...props} ref={ref} />
+	)),
+	ViewColumn: forwardRef((props, ref) => (
+	  <ViewColumn {...props} ref={ref} />
+	)),
+      };
+      return (
+	<Container maxWidth="xl" disableGutters={true}>
+	  <React.Fragment>
+	    <MaterialTable
+	      title="Records table"
+	      columns={this.state.columns}
+	      data={this.state.data}
+	      editable={{
+		onRowUpdate: (newData, oldData) =>
+		  new Promise((resolve, reject) => {
+		    setTimeout(() => {
+		      let data = [...this.state.data];
+		      const index = data.indexOf(oldData);
+		      data[index] = newData;
+		      this.clickUpdateStudent(oldData, newData);
+		      this.setState({
+			data: data,
+		      });
+		      resolve();
+		    }, 1000);
+		  }),
+		onRowDelete: (oldData) =>
+		  new Promise((resolve, reject) => {
+		    setTimeout(() => {
+		      {
+			let data = this.state.data;
+			const index = data.indexOf(oldData);
+			const del_id = data[index].id;
+			this.clickDeleteStudent(del_id);
+			this.setState({
+			  data: data.filter((student) => student.id !== del_id),
+			});
+			this.getStudents();
+		      }
+		      resolve();
+		    }, 1000);
+		  }),
+	      }}
+	      icons={tableIcons}
+	      options={{
+		rowStyle: {
+		  backgroundColor: "#FFFFFF",
+		},
+		headerStyle: {
+		  backgroundColor: "#EEE",
+		  fontWeight: "bold",
+		  fontSize: 16,
+		},
+	      }}
+	    />
+	  </React.Fragment>
+	</Container>
+      );
+    }
+  }
+#+end_src
+
+**** src
+
+#+name:sql-injection-src-db.js
+#+begin_src js
+  const Sequelize = require("sequelize");
+
+  const sequelize = new Sequelize(
+    "postgres://docker:docker@127.0.0.1:5432/postgres"
+  );
+
+  sequelize
+    .authenticate()
+    .then(() => {
+      console.log("Connection has been established successfully.");
+    })
+    .catch((err) => {
+      console.error("Unable to connect to the database:", err);
+    });
+
+  module.exports = sequelize;
+#+end_src
+
+***** models
+
+#+name:sql-injection-src-models-student.js
+#+begin_src js
+  const sequelize = require("../db");
+  const Sequelize = require("sequelize");
+
+  const Student = sequelize.define(
+    "student",
+    {
+      first_name: {
+	type: Sequelize.STRING,
+	allowNull: false,
+      },
+      last_name: {
+	type: Sequelize.STRING,
+	allowNull: false,
+      },
+      id: {
+	type: Sequelize.INTEGER,
+	allowNull: false,
+	primaryKey: true,
+      },
+    },
+    {
+      timestamps: false,
+    }
+  );
+
+  module.exports = Student;
+#+end_src
+
+***** routes
+
+#+name:sql-injection-src-routes-students.js
+#+begin_src js
+  const express = require("express");
+  const Student = require("../models/student");
+  const router = express.Router();
+  var pg = require("pg");
+
+  const client = new pg.Client({
+    user: "docker",
+    database: "postgres",
+    password: "docker",
+    port: 5432,
+  });
+  client.connect();
+
+  router.get("/", async (req, res) => {
+    try {
+      const users = await Student.findAll({});
+      res.json(users);
+    } catch (error) {
+      res.status(500).json(error);
+    }
+  });
+
+  router.post("/add", (req, res) => {
+    var whitelist = ["first_name", "last_name", "id"];
+    var data = {};
+
+    for (var property in req.body) {
+      if (
+	req.body.hasOwnProperty(property) &&
+	whitelist.indexOf(property) !== -1
+      ) {
+	data[property] = req.body[property];
+      }
+    }
+    const newStudent = new Student(data);
+
+    newStudent
+      .save()
+      .then((student) => res.json(student))
+      .catch((err) => res.status(500).json(err));
+  });
+
+  router.delete("/delete/:id", async (req, res) => {
+    const idToDel = req.params.id;
+    console.log(req.params.id);
+    try {
+      const success = await Student.destroy({ where: { id: idToDel } });
+    } catch {
+      (err) => res.json(500, err);
+    }
+    const users = await Student.findAll({});
+    res.json(users);
+  });
+
+  router.post("/update/:id", (req, res) => {
+    console.log(
+      "UPDATE students SET first_name= '" +
+	req.body.first_name +
+	"', last_name='" +
+	req.body.last_name +
+	"', id='" +
+	req.body.id +
+	"' WHERE id='" +
+	req.params.id +
+	"';"
+    );
+    client.query(
+      "UPDATE students SET first_name= '" +
+	req.body.first_name +
+	"', last_name='" +
+	req.body.last_name +
+	"', id='" +
+	req.body.id +
+	"' WHERE id='" +
+	req.params.id +
+	"';",
+      (err, result) => {
+	console.log("Updated");
+	if (err) {
+	  console.log(err);
+	}
+      }
+    );
+  });
+
+  module.exports = router;
+#+end_src
+
+* HTTPS
+
+* Password Encryption and Storage
+
+* Authentication--Access Control--Safe File Handling
+
+* Safe Defaults--Cross-Site Scripting
+
 * Build Tools
 :PROPERTIES:
 :appendix: t
